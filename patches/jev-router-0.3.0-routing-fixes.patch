@@ -1,0 +1,38 @@
+--- a/src/proxy.mjs
++++ b/src/proxy.mjs
+@@ -54,7 +54,11 @@
+  */
+ export function newTurnPrompt(body) {
+   if (!Array.isArray(body?.tools) || body.tools.length === 0) return null; // auxiliary call
+-  const last = body?.messages?.[body.messages.length - 1];
++  // Newer Claude Code builds append trailing "system" messages after the user's turn.
++  const messages = Array.isArray(body?.messages) ? body.messages : [];
++  let index = messages.length - 1;
++  while (index >= 0 && messages[index].role === "system") index--;
++  const last = messages[index];
+   if (!last || last.role !== "user") return null;
+   let text;
+   if (typeof last.content === "string") {
+@@ -68,7 +72,10 @@
+   } else {
+     return null;
+   }
+-  return text.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "").trim() || null;
++  const prompt = text.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "").trim();
++  // Claude Code's own prompt-suggestion call is not a user turn and must not set the tier.
++  if (prompt.startsWith("[SUGGESTION MODE")) return null;
++  return prompt || null;
+ }
+ 
+ /**
+@@ -232,7 +239,9 @@
+                 jev: tierAnswer,
+                 current,
+                 available,
+-                contextTokens,
++                // The cache-rebuild guard protects a cache built on `current`; the first turn
++                // of a conversation has none yet, however large its opening message is.
++                contextTokens: state.tier ? contextTokens : 0,
+               });
+               const model =
+                 shouldUseExactModel(reason, chosen?.tier, tier)

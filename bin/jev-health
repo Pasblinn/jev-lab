@@ -1,0 +1,18 @@
+#!/bin/sh
+# Exit 0 only when Jev answered a real typed decision just now. Any other outcome writes
+# the reason to ~/.jev/DOWN so the fallback hooks can tell the user why routing is off.
+FLAG="$HOME/.jev/DOWN"; mkdir -p "$HOME/.jev"
+fail() { printf '%s | %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" > "$FLAG"; exit 1; }
+[ -x "$HOME/.local/share/mise/shims/jev-claude" ] || fail "jev-claude shim missing"
+[ -r "$HOME/.jev-router.env" ] || fail "~/.jev-router.env missing"
+KEY=$(sed -n 's/^JEV_API_KEY=//p' "$HOME/.jev-router.env" | head -1)
+[ -n "$KEY" ] || fail "JEV_API_KEY empty"
+BODY='{"model":"jev-latest","state":{"ping":"health"},"questions":{"alive":{"type":"choice","instructions":"Pick yes.","criteria":{"yes":"always","no":"never"}}}}'
+# Key goes through stdin config so it never shows up in `ps`.
+RESP=$(printf 'header = "Authorization: Bearer %s"\n' "$KEY" | curl -sS --max-time 6 --config - \
+  -H 'Content-Type: application/json' -d "$BODY" -w '\nHTTP:%{http_code}' \
+  https://api.typesafe.ai/v1/systemone 2>&1) || fail "network: $(printf '%s' "$RESP" | tail -1 | cut -c1-120)"
+CODE=$(printf '%s' "$RESP" | sed -n 's/^HTTP://p')
+[ "$CODE" = "200" ] || fail "HTTP $CODE from api.typesafe.ai"
+printf '%s' "$RESP" | grep -q '"choice"' || fail "response without a typed choice"
+rm -f "$FLAG"; exit 0

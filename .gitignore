@@ -1,0 +1,7 @@
+NOTAS-PRIVADAS.md
+jevteste/
+jevteste-grande/
+.env*
+*.log
+dump.*.json
+.DS_Store

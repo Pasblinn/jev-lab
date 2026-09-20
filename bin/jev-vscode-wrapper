@@ -1,0 +1,12 @@
+#!/bin/sh
+# VS Code "claudeCode.claudeProcessWrapper": invoked as <wrapper> <claude-binary> <args...>.
+CLAUDE_BIN="$1"; shift
+PATH="$HOME/.local/share/mise/shims:$PATH"; export PATH
+if ! "$HOME/.local/bin/jev-health"; then
+  exec "$CLAUDE_BIN" --settings "$HOME/.jev/fallback-settings.json" "$@"
+fi
+# jev-claude looks up `claude` on PATH, so expose the extension's own binary under that name.
+SHIM_DIR="$(mktemp -d "${TMPDIR:-/tmp}/jev-vscode.XXXXXX")"
+ln -s "$CLAUDE_BIN" "$SHIM_DIR/claude"
+trap 'rm -rf "$SHIM_DIR"' EXIT
+PATH="$SHIM_DIR:$PATH" "$HOME/.local/share/mise/shims/jev-claude" "$@"

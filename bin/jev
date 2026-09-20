@@ -1,0 +1,5 @@
+#!/bin/sh
+# jev-router launcher with a hard fallback: no verified Jev decision -> plain Claude + alert hooks.
+if "$HOME/.local/bin/jev-health"; then exec jev-claude "$@"; fi
+echo "[jev] FORA DO AR: $(cat "$HOME/.jev/DOWN") -> abrindo Claude normal" >&2
+exec claude --settings "$HOME/.jev/fallback-settings.json" "$@"
