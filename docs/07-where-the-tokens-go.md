@@ -67,6 +67,18 @@ The opening request of `say only: ok`, captured with a body-only dump proxy. **R
 2. **Your own prose is the small part.** Instructions and hooks are ~17%. Tools, skills and agents are ~75%.
 3. Realistic cut: 20 to 30% of the baseline, on every request of every session. Still, on an 800k session the baseline is ~10% of what gets re-read. **Ceiling first, baseline second, routing a distant third.**
 
+## Measured cut: denying tools you never use
+
+Does a denied tool still ship its schema? No. Same folder, same prompt, real totals from the API usage:
+
+| Run | Tools in payload | Real tokens, first request |
+| --- | --- | --- |
+| baseline | 41 | 76,100 |
+| `--settings` with `permissions.deny` for 4 publishing/design tools | 37 | **55,297** |
+| `--disallowedTools` with the same 4 | 37 | 55,296 |
+
+**−20.8k tokens (−27%) on every request of every session**, from four tools. Both mechanisms remove the schema from the request, not just the permission. Check your own heaviest schemas with `tools/base-breakdown.sh` before copying this list: a denied tool is gone even when you do want it.
+
 ## What this means for Jev
 
 Not that Jev is the wrong tool: that a chat-session router is the wrong *place* for it. Small, enveloped tasks with minimal state are where a typed decision layer pays, because there the context never grows. See [the completion gate experiment](08-completion-gate.md) and [Using Jev the right way](00-using-jev-well.md).
