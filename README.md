@@ -5,86 +5,90 @@
   <img alt="jev" src="https://img.shields.io/badge/Jev-1.13.0-22d3ee">
   <img alt="jev-router" src="https://img.shields.io/badge/jev--router-0.3.0%20%2B%20patch-f59e0b">
   <img alt="claude code" src="https://img.shields.io/badge/Claude%20Code-2.1.278-10b981">
-  <img alt="status" src="https://img.shields.io/badge/status-laborat%C3%B3rio-ef4444">
+  <img alt="status" src="https://img.shields.io/badge/status-lab-ef4444">
 </p>
 
 # jev-lab
 
-Laboratório aberto de uso do **[Jev](https://docs.typesafe.ai)** (o modelo *System One* da TypeSafe — devolve decisões tipadas com probabilidade, não texto) na frente do **Claude Code**, roteando cada turno para o modelo mais barato que dá conta.
+An open lab for using **[Jev](https://docs.typesafe.ai)** *correctly* next to **Claude Code**.
 
-Aqui não tem hype: tem **o que medimos, o que quebrou, o patch e a trava de segurança**.
+Jev is TypeSafe's *System One* model: you give it a state and typed questions, it returns values **from your own schema** with probabilities, in well under a second, for about US$ 0.00001 per decision. It does not write text. That makes it a different kind of building block: a **decision layer**, not a cheaper chatbot.
+
+Saving tokens is a side effect. The point of this lab is to learn **where a typed decision belongs, where it does not, and how to find out when it silently stopped working**.
 
 > [!IMPORTANT]
-> Projeto independente. Não é afiliado à TypeSafe, à Anthropic nem ao [`jev-router`](https://github.com/gargpratyush/jev-router), que é a base sobre a qual este lab roda.
+> Independent project. Not affiliated with TypeSafe, Anthropic, or [`jev-router`](https://github.com/gargpratyush/jev-router), which this lab builds on.
 
-## O resultado em uma tabela
+## What is in here
 
-Mesmo prompt (`diga apenas: ok`), mesmo Jev (`p=0.99` para Haiku), três situações:
+| | |
+| --- | --- |
+| 🧠 [Using Jev the right way](docs/00-using-jev-well.md) | the decision-layer pattern, question design, thresholds, what Jev must never decide alone |
+| 🔬 [Two silent bugs and the patch](docs/01-bugs-and-patch.md) | root cause measured with `JEV_DUMP`, A/B proof, relation to the upstream PRs |
+| 🛟 [Hard fallback and alerts](docs/02-fallback.md) | the health gate, what it covers, what it does not |
+| 🧪 [Testing on a budget](docs/03-testing.md) | verify by transcript, never by status line |
+| 🧭 [Case study: a long session](docs/04-long-session.md) | Jev wanted Haiku on top of 760k cached tokens, and why that matters |
+| 📚 [Lessons from the ecosystem](docs/05-ecosystem-lessons.md) | what the issues of the fastest-growing Jev repos already taught |
+| ⚠️ [Known risks](docs/06-risks.md) | read before using this for serious work |
 
-| Situação | Sem o patch | Com o patch |
+## The first experiment: per-turn model routing
+
+Same prompt (`say only: ok`), same Jev answer (`p=0.99` for Haiku), three situations:
+
+| Situation | Stock jev-router 0.3.0 | With the patch |
 | --- | --- | --- |
-| Pasta vazia, modo `-p` | 🔴 Opus — nenhuma decisão registrada | 🟢 `opus → haiku` |
-| Projeto com `CLAUDE.md` de 145 KB (ctx ~46k) | 🔴 Opus — `downgrade-not-worth-cache-rebuild` | 🟢 `opus → haiku` |
-| Sessão longa (760k+ tokens em cache) | 🟢 Opus mantido | 🟢 Opus mantido — a trava de cache continua valendo |
+| Empty folder, `-p` mode | 🔴 Opus, no decision recorded | 🟢 `opus → haiku` |
+| Project with a 145 KB `CLAUDE.md` (ctx ~46k) | 🔴 Opus, `downgrade-not-worth-cache-rebuild` | 🟢 `opus → haiku` |
+| Long session (760k+ cached tokens) | 🟢 Opus kept | 🟢 Opus kept, the cache guard still applies |
 
-Os dois bugs eram **silenciosos**: a status line aparecia, o proxy reescrevia o modelo, e tudo saía em Opus.
+Both bugs were **silent**: the status line showed up, the proxy rewrote the model, and everything went to Opus.
 
-## Como funciona
+## How it works
 
 ```mermaid
 flowchart LR
-    U([seu prompt]) --> H{jev-health<br/>decisão real em ~1 s}
-    H -- falhou --> F[Claude normal<br/>+ hooks de alerta 🚨]
-    H -- ok --> P[proxy local<br/>jev-router]
-    P --> J[[Jev<br/>choice + probabilidades]]
-    J --> G{política<br/>trava de cache · confiança}
+    U([your prompt]) --> H{jev-health<br/>one real decision, ~1 s}
+    H -- failed --> F[plain Claude Code<br/>+ alert hooks 🚨]
+    H -- ok --> P[local proxy<br/>jev-router]
+    P --> J[[Jev<br/>choice + probabilities]]
+    J --> G{policy<br/>cache guard · confidence}
     G --> M1[haiku]
     G --> M2[sonnet]
     G --> M3[opus]
 ```
 
-1. **`jev-health`** faz uma decisão real no Jev antes de abrir a sessão. Só passa com HTTP 200 **e** um `choice` tipado na resposta.
-2. Passou → `jev-claude` sobe o proxy e o Jev escolhe o tier de cada turno novo.
-3. Falhou → abre o Claude Code **sem** roteamento, com hooks que avisam em toda mensagem e disparam notificação do sistema. Roteamento desligado em silêncio é o pior cenário; aqui ele não existe.
+1. **`jev-health`** asks Jev one real question before the session opens. It passes only on HTTP 200 **and** a typed `choice` in the answer.
+2. Passed: `jev-claude` starts the proxy and Jev picks the tier of every fresh turn.
+3. Failed: Claude Code opens **without** routing, with hooks that warn on every message and fire a system notification. Routing that is off without anyone noticing is the worst case; here it cannot happen at session start.
 
-## Instalação
+## Install
 
-Pré-requisitos: Claude Code logado, Node 20.12+, [`jev-router`](https://github.com/gargpratyush/jev-router) **0.3.0** e uma chave da TypeSafe.
+Requirements: a logged-in Claude Code, Node 20.12+, [`jev-router`](https://github.com/gargpratyush/jev-router) **0.3.0**, and a TypeSafe key.
 
 ```sh
 git clone https://github.com/Pasblinn/jev-lab && cd jev-lab
-printf 'JEV_API_KEY=%s\n' "<sua chave>" > ~/.jev-router.env && chmod 600 ~/.jev-router.env
+printf 'JEV_API_KEY=%s\n' "<your key>" > ~/.jev-router.env && chmod 600 ~/.jev-router.env
 ./install.sh
 jev
 ```
 
-| Comando | Papel |
+| Command | Role |
 | --- | --- |
-| `jev` | Lançador do terminal: health check → roteador, ou fallback |
-| `jev-health` | A trava. Exit 0 só com decisão real; senão grava o motivo em `~/.jev/DOWN` |
-| `jev-down-hook` | Hook de alerta, carregado **apenas** no fallback via `--settings` |
-| `jev-vscode-wrapper` | Para `claudeCode.claudeProcessWrapper` na extensão do VS Code |
+| `jev` | Terminal launcher: health gate, then router or fallback |
+| `jev-health` | The gate. Exit 0 only on a real decision; otherwise writes the reason to `~/.jev/DOWN` |
+| `jev-down-hook` | Alert hook, loaded **only** on the fallback path via `--settings` |
+| `jev-vscode-wrapper` | For `claudeCode.claudeProcessWrapper` in the VS Code extension |
 
-Nada disso toca em `~/.claude/settings.json`. Desinstalar = apagar os quatro arquivos e restaurar `proxy.mjs.orig`.
+None of this touches `~/.claude/settings.json`. Uninstall = delete the four files and restore `proxy.mjs.orig`.
 
-## Documentação
+## Lab principles
 
-| | |
-| --- | --- |
-| 🔬 [Os dois bugs e o patch](docs/01-bugs-e-patch.md) | causa raiz medida com `JEV_DUMP`, A/B, relação com os PRs upstream |
-| 🛟 [Fallback e alerta](docs/02-fallback.md) | desenho da trava, o que cobre e o que não cobre |
-| 🧪 [Como testar gastando pouco](docs/03-como-testar.md) | o método de verificação por transcript, não por status line |
-| 🧭 [Estudo de caso: sessão longa](docs/04-sessao-longa.md) | o Jev quis Haiku com 760k tokens em cache — e por que isso importa |
-| 📚 [Lições do ecossistema](docs/05-licoes-do-ecossistema.md) | o que as issues dos repos que explodiram já ensinaram |
-| ⚠️ [Riscos conhecidos](docs/06-riscos.md) | leia antes de usar em trabalho sério |
+- **Deterministic rules first, Jev second, a strong model only for exceptions.**
+- **Measure in transcripts and billed dollars**, never in status lines or cache percentages.
+- **Jev's ranking is reliable; its absolute probability is not.** Thresholds copied from a README break in real use.
+- **Every failure must be loud.**
+- **Jev is never the sole authority** on anything destructive or irreversible.
 
-## Princípios do lab
-
-- **Medir em transcript e em dólar faturado**, nunca em status line ou percentual de cache.
-- **O ranking do Jev é confiável; a probabilidade absoluta não.** Threshold copiado de README quebra em uso real.
-- **Toda falha precisa ser barulhenta.**
-- **Jev nunca é autoridade única** em nada destrutivo ou irreversível.
-
-## Licença
+## License
 
 [MIT](LICENSE)

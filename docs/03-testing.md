@@ -1,0 +1,39 @@
+# 🧪 Testing on a budget
+
+The status line lies by omission: it shows up even when no decision was made. **The transcript is the proof.**
+
+## Script (about two cheap turns)
+
+```sh
+mkdir -p /tmp/jevtest && cd /tmp/jevtest      # empty folder: no CLAUDE.md, no tools firing
+JEV_DEBUG=1 jev -p "say only: ok"             # expected: opus -> haiku (jev)
+```
+
+Then the control, a prompt that **must** stay up:
+
+```sh
+JEV_DEBUG=1 jev -p "no tools, one line: biggest risk of migrating auth to OAuth2 with PKCE with zero downtime?"
+```
+
+Only the pair proves anything. "It went to Haiku" alone may be a default, not a decision.
+
+## Check without spending a turn
+
+```sh
+# who actually answered
+grep -o '"model":"claude-[^"]*"' "$(ls -t ~/.claude/projects/*/*.jsonl | head -1)" | sort | uniq -c
+# what Jev decided and why
+python3 -m json.tool "$(ls -t "${TMPDIR}"jev-claude/*.json | head -1)" | grep -E '"(tier|reason|prompt|confidence)"'
+```
+
+✅ Working = **your** prompt appears in `prompt` **and** the transcript shows the model of the decided tier.
+
+## Why an empty folder
+
+A `hi` from the home directory, with a global CLAUDE.md, memory and skills, cost **91,633 cache-creation tokens**, on Opus. In the empty folder: ~13k.
+
+## Hands-free interactive run
+
+```sh
+expect -c 'spawn jev; sleep 8; send "hi\r"; sleep 25; send "/exit\r"; sleep 3'
+```

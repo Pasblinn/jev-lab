@@ -1,45 +1,45 @@
-# 🛟 Fallback e alerta
+# 🛟 Hard fallback and alerts
 
-Requisito: se o Jev não funcionar, cair no Claude normal — mas só quando houver **certeza** da falha, e **avisar alto**, porque roteamento desligado em silêncio custa caro e ninguém percebe.
+Requirement: if Jev is not working, drop to plain Claude Code, but only when the failure is **certain**, and **say so loudly**. Routing that is off in silence is expensive and nobody notices.
 
 ```mermaid
 sequenceDiagram
-    participant U as você
+    participant U as you
     participant L as jev / jev-vscode-wrapper
     participant H as jev-health
     participant T as api.typesafe.ai
-    U->>L: abre sessão
-    L->>H: health?
-    H->>T: POST /v1/systemone (1 pergunta choice)
-    alt 200 + choice tipado
-        H-->>L: exit 0 (apaga ~/.jev/DOWN)
-        L->>U: Claude Code com roteamento
-    else qualquer outra coisa
-        H-->>L: exit 1 (grava motivo em ~/.jev/DOWN)
-        L->>U: Claude normal + --settings fallback-settings.json
-        Note over U: 🚨 notificação do sistema + aviso em todo prompt
+    U->>L: open session
+    L->>H: healthy?
+    H->>T: POST /v1/systemone (one choice question)
+    alt 200 + typed choice
+        H-->>L: exit 0 (removes ~/.jev/DOWN)
+        L->>U: Claude Code with routing
+    else anything else
+        H-->>L: exit 1 (writes reason to ~/.jev/DOWN)
+        L->>U: plain Claude + --settings fallback-settings.json
+        Note over U: 🚨 system notification + warning on every prompt
     end
 ```
 
-## A trava (`jev-health`)
+## The gate (`jev-health`)
 
-Passa **somente** se: shim do `jev-claude` existe · `~/.jev-router.env` legível com `JEV_API_KEY` · HTTP 200 em até 6 s · resposta contém um `choice` tipado. Custo: ~1,1 s e ~US$ 0,00001 por sessão. A chave vai para o `curl` por stdin (`--config -`), então não aparece em `ps`.
+Passes **only** if: the `jev-claude` shim exists · `~/.jev-router.env` is readable and has `JEV_API_KEY` · HTTP 200 within 6 s · the answer contains a typed `choice`. Cost: ~1.1 s and ~US$ 0.00001 per session. The key reaches `curl` through stdin (`--config -`), so it never shows up in `ps`.
 
-## O alerta (`jev-down-hook`)
+## The alert (`jev-down-hook`)
 
-Carregado só no caminho de fallback, via `--settings` — **não altera** `~/.claude/settings.json`, então outros clientes (Desktop, `claude` puro) ficam intocados e servem de ponto de rollback.
+Loaded only on the fallback path, via `--settings`. It does **not** modify `~/.claude/settings.json`, so other clients (Desktop, plain `claude`) stay untouched and act as the rollback point.
 
-- `SessionStart`: notificação do macOS com som + `systemMessage`.
-- `UserPromptSubmit`: `systemMessage` + instrução para o modelo abrir a resposta avisando.
+- `SessionStart`: macOS notification with sound + `systemMessage`.
+- `UserPromptSubmit`: `systemMessage` + an instruction for the model to open its reply with the warning.
 
-## Testado
+## Tested
 
-| Cenário | Resultado |
+| Scenario | Result |
 | --- | --- |
-| env da chave removido, `jev -p` | abriu Claude normal; resposta começou com **"JEV FORA DO AR … Motivo: ~/.jev-router.env ausente"** |
-| idem, wrapper do VS Code (stream-json) | mesmo aviso, modelo padrão do usuário |
-| chave restaurada | flag removida, `opus -> haiku p=1.00` |
+| key file removed, `jev -p` | plain Claude opened; the reply started with **"JEV IS DOWN … Reason: ~/.jev-router.env missing"** |
+| same, VS Code wrapper (stream-json) | same warning, user's default model |
+| key restored | flag removed, `opus -> haiku p=1.00` |
 
-## O que NÃO cobre
+## What it does NOT cover
 
-Falha **no meio** da sessão. O proxy do `jev-router` trata erro do Jev como "mantém o tier atual" e segue. Não há alerta para isso ainda.
+A failure **in the middle** of a session. `jev-router` treats a Jev error as "keep the current tier" and carries on. There is no alert for that yet.
