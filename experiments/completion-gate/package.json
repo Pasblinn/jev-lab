@@ -1,0 +1,10 @@
+{
+  "name": "jev-completion-gate-experiment",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "tsc -p . && node --test dist/*.test.js",
+    "test:live": "tsc -p . && JEV_LIVE=1 node --test dist/*.test.js"
+  },
+  "devDependencies": { "@types/node": "^22.0.0", "typescript": "^5.6.0" }
+}

@@ -30,6 +30,12 @@ Saving tokens is a side effect. The point of this lab is to learn **where a type
 | 🧭 [Case study: a long session](docs/04-long-session.md) | Jev wanted Haiku on top of 760k cached tokens, and why that matters |
 | 📚 [Lessons from the ecosystem](docs/05-ecosystem-lessons.md) | what the issues of the fastest-growing Jev repos already taught |
 | ⚠️ [Known risks](docs/06-risks.md) | read before using this for serious work |
+| 📊 [Where the tokens actually go](docs/07-where-the-tokens-go.md) | 78% of tokens in 6 giant sessions, 1% where a router can act; what the 76k baseline is made of |
+| 🚦 [Experiment 2: completion gate](docs/08-completion-gate.md) | Jev judging acceptance criteria in shadow mode, live results and a flaw already found |
+| 🗺️ [Roadmap](docs/09-roadmap.md) | Jev as the control plane of an orchestrator: five functions, status and risk |
+
+> [!NOTE]
+> **The finding that reframed this lab:** over 7 days, 78% of one developer's tokens were read by 6 giant sessions, and the sessions where a per-turn router makes decisions that stick added up to **1%**. Routing works; it is just not where the spend is. [Details](docs/07-where-the-tokens-go.md).
 
 ## The first experiment: per-turn model routing
 
@@ -83,6 +89,7 @@ None of this touches `~/.claude/settings.json`. Uninstall = delete the four file
 
 ## Lab principles
 
+- **Find where the spend is before optimising anything.**
 - **Deterministic rules first, Jev second, a strong model only for exceptions.**
 - **Measure in transcripts and billed dollars**, never in status lines or cache percentages.
 - **Jev's ranking is reliable; its absolute probability is not.** Thresholds copied from a README break in real use.

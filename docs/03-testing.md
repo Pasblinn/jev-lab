@@ -30,7 +30,7 @@ python3 -m json.tool "$(ls -t "${TMPDIR}"jev-claude/*.json | head -1)" | grep -E
 
 ## Why an empty folder
 
-A `hi` from the home directory, with a global CLAUDE.md, memory and skills, cost **91,633 cache-creation tokens**, on Opus. In the empty folder: ~13k.
+An empty folder avoids a project `CLAUDE.md` and keeps tools from firing on a trivial prompt, so the test stays at one or two requests. It does **not** make the request small: the opening request measured 76k tokens in an empty folder and 74k in the home directory, because the baseline is global ([breakdown](07-where-the-tokens-go.md)). The `ctx~13k` the router logs counts messages only, not tools or the system prompt.
 
 ## Hands-free interactive run
 
