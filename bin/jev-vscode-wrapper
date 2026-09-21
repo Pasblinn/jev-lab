@@ -1,10 +1,34 @@
 #!/bin/sh
 # VS Code "claudeCode.claudeProcessWrapper": invoked as <wrapper> <claude-binary> <args...>.
+# Jev is a helper, never a risk: long resumed sessions and a failing Jev both get plain Claude.
 CLAUDE_BIN="$1"; shift
 PATH="$HOME/.local/share/mise/shims:$PATH"; export PATH
-if ! "$HOME/.local/bin/jev-health"; then
-  exec "$CLAUDE_BIN" --settings "$HOME/.jev/fallback-settings.json" "$@"
+LIMIT="${JEV_MAX_RESUME_CONTEXT:-150000}"
+
+# A resumed session that already holds a large context gains nothing from routing (the cache guard
+# pins its tier) and only adds a proxy in the middle. Read its last recorded context and step aside.
+resume_id=""; prev=""
+for arg in "$@"; do [ "$prev" = "--resume" ] && resume_id="$arg"; prev="$arg"; done
+context=0
+if [ -n "$resume_id" ]; then
+  transcript=$(ls "$HOME"/.claude/projects/*/"$resume_id".jsonl 2>/dev/null | head -1)
+  [ -n "$transcript" ] && context=$(tail -c 400000 "$transcript" | python3 -c '
+import json,sys
+last=0
+for line in sys.stdin:
+    try: u=json.loads(line)["message"]["usage"]
+    except Exception: continue
+    last=u.get("input_tokens",0)+u.get("cache_read_input_tokens",0)+u.get("cache_creation_input_tokens",0)
+print(last)' 2>/dev/null || echo 0)
 fi
+mode=jev; [ "${context:-0}" -gt "$LIMIT" ] && mode=plain-long-session
+[ "$mode" = jev ] && ! "$HOME/.local/bin/jev-health" && mode=plain-jev-down
+if [ -n "$JEV_WRAPPER_DRYRUN" ]; then echo "mode=$mode resume=${resume_id:-none} context=$context limit=$LIMIT"; exit 0; fi
+
+case "$mode" in
+  plain-long-session) exec "$CLAUDE_BIN" "$@" ;;
+  plain-jev-down)     exec "$CLAUDE_BIN" --settings "$HOME/.jev/fallback-settings.json" "$@" ;;
+esac
 # jev-claude looks up `claude` on PATH, so expose the extension's own binary under that name.
 SHIM_DIR="$(mktemp -d "${TMPDIR:-/tmp}/jev-vscode.XXXXXX")"
 ln -s "$CLAUDE_BIN" "$SHIM_DIR/claude"

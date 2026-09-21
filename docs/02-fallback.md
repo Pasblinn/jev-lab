@@ -40,6 +40,19 @@ Loaded only on the fallback path, via `--settings`. It does **not** modify `~/.c
 | same, VS Code wrapper (stream-json) | same warning, user's default model |
 | key restored | flag removed, `opus -> haiku p=1.00` |
 
+## Long sessions step aside
+
+The VS Code wrapper reads the last recorded context of a resumed session (`--resume <id>` → transcript usage).
+Above `JEV_MAX_RESUME_CONTEXT` (default 150k tokens) it launches plain Claude Code, no proxy, no alert: on a
+long session the cache guard pins the tier anyway ([case study](04-long-session.md)), so routing adds only risk.
+`JEV_WRAPPER_DRYRUN=1` prints the decision without launching:
+
+```
+new session:    mode=jev                 context=0
+small resumed:  mode=jev                 context=39119
+long resumed:   mode=plain-long-session  context=914155
+```
+
 ## What it does NOT cover
 
 A failure **in the middle** of a session. `jev-router` treats a Jev error as "keep the current tier" and carries on. There is no alert for that yet.
