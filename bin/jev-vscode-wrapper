@@ -3,12 +3,21 @@
 # Jev is a helper, never a risk: long resumed sessions and a failing Jev both get plain Claude.
 CLAUDE_BIN="$1"; shift
 PATH="$HOME/.local/share/mise/shims:$PATH"; export PATH
-LIMIT="${JEV_MAX_RESUME_CONTEXT:-150000}"
+export CLAUDE_CODE_MAX_CONTEXT_TOKENS="1000000"
+export CLAUDE_CODE_AUTO_COMPACT_WINDOW="1000000"
+export CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT="1"
+LIMIT="${JEV_MAX_RESUME_CONTEXT:-1000000}"
 
 # A resumed session that already holds a large context gains nothing from routing (the cache guard
 # pins its tier) and only adds a proxy in the middle. Read its last recorded context and step aside.
 resume_id=""; prev=""
-for arg in "$@"; do [ "$prev" = "--resume" ] && resume_id="$arg"; prev="$arg"; done
+for arg in "$@"; do
+  case "$arg" in
+    --resume=*) resume_id="${arg#--resume=}" ;;
+  esac
+  [ "$prev" = "--resume" ] && resume_id="$arg"
+  prev="$arg"
+done
 context=0
 if [ -n "$resume_id" ]; then
   transcript=$(ls "$HOME"/.claude/projects/*/"$resume_id".jsonl 2>/dev/null | head -1)
@@ -22,7 +31,15 @@ for line in sys.stdin:
 print(last)' 2>/dev/null || echo 0)
 fi
 mode=jev; [ "${context:-0}" -gt "$LIMIT" ] && mode=plain-long-session
-[ "$mode" = jev ] && ! "$HOME/.local/bin/jev-health" && mode=plain-jev-down
+if [ "$mode" = jev ]; then
+  retries=3
+  while [ "$retries" -gt 0 ]; do
+    if "$HOME/.local/bin/jev-health"; then break; fi
+    retries=$((retries - 1))
+    [ "$retries" -gt 0 ] && sleep 1
+  done
+  [ "$retries" -eq 0 ] && mode=plain-jev-down
+fi
 if [ -n "$JEV_WRAPPER_DRYRUN" ]; then echo "mode=$mode resume=${resume_id:-none} context=$context limit=$LIMIT"; exit 0; fi
 
 case "$mode" in
